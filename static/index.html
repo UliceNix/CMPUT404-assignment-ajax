@@ -1,19 +1,19 @@
 <!DOCTYPE HTML>
-<html> 
-  <head> 
-    <title>AJAX Assignment</title> 
-    <meta charset="utf-8" /> 
+<html>
+  <head>
+    <title>AJAX Assignment</title>
+    <meta charset="utf-8" />
     <meta content='width=device-width; height=device-height; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;' name='viewport' />
     <meta name="viewport" content="width=device-width" />
     <meta name="license" content="
         Copyright 2013 Abram Hindle
-        
+        Copyright 2016 Alice Wu
         Licensed under the Apache License, Version 2.0 (the "License");
         you may not use this file except in compliance with the License.
         You may obtain a copy of the License at
-        
+
             http://www.apache.org/licenses/LICENSE-2.0
-        
+
         Unless required by applicable law or agreed to in writing, software
         distributed under the License is distributed on an "AS IS" BASIS,
         WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,9 +21,9 @@
         limitations under the License.
     "/>
     <script src="json2.js"></script>
-  </head> 
-  <body bgcolor="black" height="100%" width="100%"> 
-    <canvas id="c" width="100%" height="100%" style="-webkit-tap-highlight-color: transparent;"></canvas> 
+  </head>
+  <body bgcolor="white" height="100%" width="100%">
+    <canvas id="c" width="100%" height="100%" bgcolor="white" style="-webkit-tap-highlight-color: transparent;"></canvas>
     <script>
 var canvas = document.getElementById('c');
 var host = window.location.host;
@@ -38,18 +38,23 @@ function sendJSONXMLHTTPRequest(url, objects, callback) {
         if (xhr.readyState==4) {
             try {
                 if (xhr.status==200) {
-                    //XXX: parse some JSON from the request!
-                    //XXX: Pass the data to the callback!
+                    try {
+                      callback(JSON.parse(xhr.responseText));
+                    } catch (e) {
+                      alert("Parsing Error: " + e);
+                    }
                 }
-            } 
+            }
             catch(e) {
                 alert('Error: ' + e.name);
             }
         }
     };
-    //XXX: POST to a URL
-    //XXX: set the mimetype and the accept headers!
-    // Remember to use application/json !
+
+    xhr.open("POST", url);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.send(JSON.stringify(objects));
 }
 
 
@@ -58,15 +63,17 @@ world = {};
 //XXX: TODO Make this prettier!
 function drawCircle(context,entity) {
     with(context) {
-        beginPath();              
+        beginPath();
         lineWidth = 3;
         var x = entity["x"];
         var y = entity["y"];
         //moveTo(x,y);
         fillStyle = entity["colour"];
-        strokeStyle = fillStyle;
-        arc(x, y, (entity["radius"])?entity["radius"]:50, 0, 2.0 * Math.PI, false);  
-        stroke();                                
+        strokeStyle = entity["stroke-colour"];
+        lineWidth = entity["stroke-width"];
+        arc(x, y, (entity["radius"])?entity["radius"]:50, 0, 2.0 * Math.PI, false);
+        stroke();
+        fill();
     }
 }
 
@@ -92,6 +99,26 @@ function clearFrame() {
 // This actually draws the frame
 function renderFrame() {
     clearFrame();
+
+    // taken from: https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Applying_styles_and_colors
+    // draw background
+    context.fillStyle = '#ffd3d3';
+    context.fillRect(0, 0, W, H);
+    context.fillStyle = '#ff9595';
+    context.fillRect(0.5*W, 0, 0.5*W, 0.5*H);
+    context.fillStyle = '#ffefef';
+    context.fillRect(0, 0.5*H, 0.5*W, 0.5*H);
+    context.fillStyle = '#ffb9b9';
+    context.fillRect(0.5*W, 0.5*H, 0.5*W, 0.5*H);
+
+    context.fillStyle = '#FFF';
+
+    // set transparency value
+    context.globalAlpha=0.95;
+    context.beginPath();
+    context.arc(0.5*W, 0.5*H, 0.5*H, 0, Math.PI * 2, true);
+    context.fill();
+
     for (var key in world) {
         var entity = world[key];
         drawCircle(context,prepEntity(entity));
@@ -137,7 +164,8 @@ function getPosition(e) {
 function addEntity(entity, data) {
     world[entity] = data;
     drawNextFrame(); // (but should we?)
-    //XXX: Send a XHTML Request that updates the entity you just  modified!
+    sendJSONXMLHTTPRequest("entity/" + entity, data, function(data){
+    });
 
 }
 
@@ -148,14 +176,23 @@ function addEntityWithoutName(data) {
     addEntity(name,data);
 }
 
-// canvas + mouse/touch is complicated 
+var colourCounter = 0, gradientRange = [];
+for (var i = 0; i < 4; i++) {
+  for (var j = 0; j < 3; j++) {
+    var color = 'rgb(0,' + Math.floor(255 - 42.5 * i) + ','
+      + Math.floor(255 - 42.5 * j) + ')';
+    gradientRange.push(color);
+  }
+}
+
+// canvas + mouse/touch is complicated
 // I give you this because well the mouse/touch stuff is a total
 // pain to get right. This has some out of context bug too.
 mouse = (function() {
-    // Now this isn't the most popular way of doing OO in 
+    // Now this isn't the most popular way of doing OO in
     // Javascript, but it relies on lexical scope and I like it
     // This isn't 301 so I'm not totally bound to OO :)
-    var self;    
+    var self;
     self = {
         clicked: 0,
         // these are listener lists append to them
@@ -204,7 +241,7 @@ mouse = (function() {
             }
         },
         touchstart: function(e) {
-            self.lasttouch = e;                                         
+            self.lasttouch = e;
             return self.mousedown(e);
         },
 	touchend: function(e) {
@@ -222,10 +259,10 @@ mouse = (function() {
                     self.callListeners(self.mousedraggers,x,y,self.clicked,e);
 	        }
                 self.callListeners(self.mousemovers,x,y,self.clicked,e);
-            }            
+            }
 	},
 	touchmove: function(e) {
-            self.lasttouch = e;                                         
+            self.lasttouch = e;
             return self.mousemove(e);
 	},
 	// Install the mouse listeners
@@ -247,21 +284,28 @@ mouse = (function() {
 // Add the application specific mouse listeners!
 //XXX: TODO Make these prettier!
 mouse.mousedowners.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'blue'});
+  addEntityWithoutName({'x':x,'y':y,'colour':'#99e6ff', 'radius':70,
+  'stroke-width': 10, 'stroke-colour': '#d9b3ff'});
 });
 
 mouse.mouseuppers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'red'});
+  addEntityWithoutName({'x':x,'y':y,'colour':'#99ffcc', 'radius':60,
+  'stroke-width': 10, 'stroke-colour': '#99e6ff'});
 });
 
 mouse.mousedraggers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'green',
-                          'radius':10});
+  addEntityWithoutName({'x':x,'y':y,'colour':gradientRange[colourCounter % gradientRange.length],
+  'radius':15, 'stroke-width': 2,
+  'stroke-colour':gradientRange[colourCounter % gradientRange.length]});
+  colourCounter++;
 });
 
 
 function update() {
-    //XXX: TODO Get the world from the webservice using a XMLHTTPRequest
+    sendJSONXMLHTTPRequest('/world', null, function(data) {
+        world = data;
+        drawNextFrame();
+    });
     drawFrame();
 }
 
