@@ -94,14 +94,22 @@ def update(entity):
         myWorld.set(entity, flask_post_json())
     elif request.method == 'PUT':
         var = flask_post_json()
-        for key, value in var.iteritems():
-            myWorld.update(entity, key, value);
+        if var != None:
+            for key, value in var.iteritems():
+                myWorld.update(entity, key, value)
     return response_json(myWorld.get(entity))
 
 @app.route("/world", methods=['POST','GET'])
 def world():
     '''you should probably return the world here'''
-    return response_json(myWorld.world())
+    if request.method == 'POST':
+        var = flask_post_json()
+        if var != None:
+            for key, value in var.iteritems():
+                myWorld.set(key, value)
+        return response_json(myWorld.world())
+    elif request.method == 'GET':
+        return response_json(myWorld.world())
 
 @app.route("/entity/<entity>")
 def get_entity(entity):
